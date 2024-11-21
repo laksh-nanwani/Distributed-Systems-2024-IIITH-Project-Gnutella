@@ -5,8 +5,9 @@ import argparse
 import time
 import select
 
+
 class Node:
-    def __init__(self, dir_path, host='localhost', port=0, bootstrap_host='localhost', bootstrap_port=5000):
+    def __init__(self, dir_path, host="localhost", port=0, bootstrap_host="localhost", bootstrap_port=5000):
         self.host = host
         self.port = port
         self.ttl = 2
@@ -18,30 +19,30 @@ class Node:
         self.requests = {}
 
     def connect_to_bootstrap(self):
-        print("connect_to_bootstrap", end = "\n\n")
+        print("connect_to_bootstrap", end="\n\n")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.connect((self.bootstrap_host, self.bootstrap_port))
 
             # Listening Port info
-            node_info = f"{self.host}:{self.port}"  
+            node_info = f"{self.host}:{self.port}"
             sock.sendall(node_info.encode())
             print("Sent info")
 
             response = sock.recv(1024).decode()
-            
+
             if response == "NO_NODES":
                 print("No nodes available, starting a new network.")
             else:
                 peer_host, peer_port = response.split(":")
-                
+
                 peer_port = int(peer_port)
                 peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 peer_socket.connect((peer_host, peer_port))
                 peer_socket.sendall(node_info.encode())
 
-                self.peers.append((peer_host, int(peer_port))) 
+                self.peers.append((peer_host, int(peer_port)))
                 print(f"Connected to peer: {peer_host}:{peer_port}")
-                
+
     def start(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             server.bind((self.host, self.port))
@@ -51,12 +52,12 @@ class Node:
 
             # Register with bootstrap server and get initial peer if available
             self.connect_to_bootstrap()
-            
-            # Threads for listening to connections and user commands 
+
+            # Threads for listening to connections and user commands
             threading.Thread(target=self.listen_for_connections, args=(server,), daemon=True).start()
             threading.Thread(target=self.handle_commands, daemon=True).start()
             threading.Thread(target=self.file_transfer, daemon=True).start()
-            
+
             # Flood PING to discover additional peers
             self.flood_ping()
 
@@ -90,17 +91,15 @@ class Node:
             elif data.startswith("GET"):
                 print("FILE TRANSFERRRRRRRRRRRRRRRRRRRRRRRRR")
                 self.send_file(data)
-                
             elif ":" in data:
                 print(f"Peer {data} connected.")
                 host, port = data.split(":")
                 self.peers.append((host, int(port)))
 
             client.close()
-    
-    
+
     def flood_ping(self):
-        print("flood_ping", end = "\n\n")
+        print("flood_ping", end="\n\n")
         for peer in self.peers[:]:  # Use a copy of the list to avoid modifying it during iteration
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 try:
@@ -123,7 +122,7 @@ class Node:
                     print(f"Failed to connect to {peer}")
 
     def send_pong(self, message):
-        print("send_pong", end = "\n\n")
+        print("send_pong", end="\n\n")
         msg_parts = message.split(":")
         # print(msg_parts, end = "\n\n\n")
         ttl = int(msg_parts[3])
@@ -143,12 +142,11 @@ class Node:
                 pong_message = f"PONG:{self.host}:{self.port}:{path}"
                 print("SENDING PONGGG to", last_peer, pong_message)
                 sock.sendall(pong_message.encode())
-        
 
     def forward_ping(self, message):
-        print("forward_ping", end = "\n\n")
+        print("forward_ping", end="\n\n")
         msg_parts = message.split(":")
-        print(msg_parts, end = "\n\n\n")
+        print(msg_parts, end="\n\n\n")
         ttl = int(msg_parts[3])
         path = eval(msg_parts[4])  # Convert string back to list of tuples
         # print(msg_parts, ttl, path)
@@ -169,28 +167,28 @@ class Node:
         else:
             # If TTL is 0, respond with a PONG along the reverse path
             self.send_pong(message)
-    
+
     def handle_pong(self, message):
-        print("handle_pong", end = "\n\n")
+        print("handle_pong", end="\n\n")
         print("AYAAAAAAAAAAAAAAAA")
         print(message.split(":"))
         m1, sender_host, sender_port, path_str = message.split(":")
-        
+
         path = eval(path_str)
         print("PATH", path)
-        
+
         # print("YEH DEKH   ", (self.host, self.port), path[0])
         if len(path) == 0:
             self.pongs.append((sender_host, int(sender_port)))
             print(f"Received PONG from {sender_host}:{sender_port}")
             return
 
-        if (self.host, self.port) == path[0]:  
+        if (self.host, self.port) == path[0]:
             self.pongs.append((sender_host, int(sender_port)))
             print(f"Received PONG from {sender_host}:{sender_port}")
         else:
             if path:
-                next_hop = path.pop() 
+                next_hop = path.pop()
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     # forward_message = f"PONG:{sender_host}:{sender_port}:{path}"
                     forward_message = f"{m1}:{sender_host}:{sender_port}:{path}"
@@ -206,7 +204,7 @@ class Node:
                 print(f"- {peer[0]}:{peer[1]}")
         else:
             print("Did not receive any replies yet.")
-    
+
     def get_connected_nodes(self):
         if self.peers:
             print("Connected nodes:")
@@ -217,7 +215,7 @@ class Node:
 
     def get_request_details(self):
         for file_name, peers in self.requests.items():
-            print(f"File {file_name} with", end = " ")
+            print(f"File {file_name} with", end=" ")
             if len(peers) == 0:
                 print("Not with peers:(")
             else:
@@ -232,7 +230,7 @@ class Node:
         return os.path.isfile(file_path)
 
     def handle_query(self, message):
-        print("handle_query", end = "\n\n")
+        print("handle_query", end="\n\n")
         print(message)
         _, sender_host, sender_port, ttl, path, file_name = message.split(":")
         path = eval(path)
@@ -242,24 +240,11 @@ class Node:
             return
 
         if self.file_exists(self.dir, file_name):
-            print("245")
             query_reply = f"QUERYHIT:{self.host}:{self.port}:{path}:{file_name}"
             self.query_response(query_reply)
-        else:
-            # Forward karte h isko age
-            ttl = int(ttl)
-            ttl -= 1
-            if ttl > 0:
-                for peer in self.peers:
-                    if peer != path[-2]:
-                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                            path.append((self.host, self.port))
-                            query_forward = f"QUERY:{sender_host}:{sender_port}:{ttl}:{path}:{file_name}"
-                            sock.connect(peer)
-                            sock.sendall(query_forward.encode())
-    
+
     def handle_queryhit(self, message):
-        print("handle_query", end = "\n\n")
+        print("handle_query", end="\n\n")
         print(message)
         _, sender_host, sender_port, path, file_name = message.split(":")
         path = eval(path)
@@ -268,22 +253,20 @@ class Node:
             self.requests[file_name].append((sender_host, sender_port))
             return
 
-        # if self.file_exists(self.dir, file_name):
-        #     print(272)
-        #     query_reply = f"QUERYHIT:{self.host}:{self.port}:{path}:{file_name}"
-        
-        
+        if self.file_exists(self.dir, file_name):
+            query_reply = f"QUERYHIT:{self.host}:{self.port}:{path}:{file_name}"
+
     def query_response(self, message):
-        print("query_response", end = "\n\n")
+        print("query_response", end="\n\n")
 
         _, sender_host, sender_port, path, file_name = message.split(":")
         path = eval(path)
-       
-        if (self.host, self.port) == path[0]:  
+
+        if (self.host, self.port) == path[0]:
             self.requests[file_name].append(((sender_host, int(sender_port))))
             print(f"File with {sender_host}:{sender_port}")
-            return 
-        
+            return
+
         if self.file_exists(self.dir, file_name):
             print("242", path)
             last_peer = path.pop()
@@ -293,10 +276,8 @@ class Node:
                 print("SENDING QUERY REPLY to", last_peer, query_reply)
                 sock.sendall(query_reply.encode())
 
-
-    
     def send_query(self, file_name):
-        print("send_query", end = "\n\n")
+        print("send_query", end="\n\n")
 
         for peer in self.peers[:]:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -310,7 +291,7 @@ class Node:
                     print(f"Failed to connect to {peer}")
 
     def handle_commands(self):
-        print("handle_commands", end = "\n\n")
+        print("handle_commands", end="\n\n")
         while True:
             # print("1. Print Connected Nodes")
             # print("2. Print Pong Replies")
@@ -331,56 +312,65 @@ class Node:
 
     def file_transfer(self):
         while True:
-            if self.requests: 
+            if self.requests:
+                file_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                file_socket.bind((self.host, 9999))
                 for file_name, list_peers in list(self.requests.items()):
                     for peer in list_peers:
                         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                            # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                             try:
                                 peer_host, peer_port = peer
                                 peer_port = int(peer_port)
                                 sock.connect((peer_host, peer_port))
-                                # client, addr = sock.accept()
                                 message = f"GET:{self.host}:{self.port}:{file_name}"
                                 sock.sendall(message.encode())
 
-                                # file_data = sock.recv(1024)
-                                # print("331", file_data)
-                                
                                 file_path = os.path.join(self.dir, file_name)
+                                print(file_path)
                                 with open(file_path, "wb") as file:
                                     print("334")
-                                    # x = 0
                                     while 1:
-                                        chunk = sock.recv(5)
-                                        print("CHUNKYY", chunk)
+                                        chunk, addr = file_socket.recvfrom(1024)
+                                        print("CHUNKYY", chunk, addr)
                                         if not chunk:
                                             break
                                         print("CHUNK DATA", chunk)
                                         file.write(chunk)
-                                        
-                            except Exception as e:  
+
+                                print(f"Received data from socket {peer} : {file_name}")
+
+                            except Exception as e:
                                 print("337Error Occurred:", str(e))
                         # Will take file from the first peer
-                        print(f"Received data from socket {peer} : {file_name}")
+                        # print(f"Received data from socket {peer} : {file_name}")
                         break
                     del self.requests[file_name]
+                file_socket.close()
             time.sleep(5)
-
-
-    
 
     def send_file(self, message):
         _, peer_host, peer_port, file_name = message.split(":")
+        print(peer_host, peer_port)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try :
+            try:
                 peer_port = int(peer_port)
-                sock.connect((peer_host, peer_port))
+                # sock.connect((peer_host, 9999))
                 if self.file_exists(self.dir, file_name):
-                    file_path = os.path.join(self.dir, file_name)
-                    with open(file_path, "rb") as file:
-                        while chunk := file.read(5):
-                            print(chunk)
-                            sock.sendall(chunk)
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock1:
+                        # sock1.bind((self.host, 9999))
+                        file_path = os.path.join(self.dir, file_name)
+                        print(f"Sending file to {peer_host}:{9999}")
+                        print(file_path)
+                        with open(file_path, "rb") as file:
+                            chunk = file.read(1024)
+                            while chunk:
+                                print(chunk)
+                                if sock1.sendto(chunk, (peer_host, 9999)):
+                                    chunk = file.read(1024)
+                            # while chunk := file.read(1024):
+                            #     print(chunk)
+                            #     sock.sendto()
                 else:
                     message = "File Not Available"
                     sock.sendall(message.encode())
@@ -388,17 +378,9 @@ class Node:
                 print(e)
 
 
-                
-
-        
-
-
-
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('directory_path')
+    parser.add_argument("directory_path")
     args = parser.parse_args()
     if os.path.isdir(args.directory_path):
         print(f"Starting node with directory: {args.directory_path}")
