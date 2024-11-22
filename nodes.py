@@ -314,6 +314,7 @@ class Node:
         while True:
             if self.requests:
                 file_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                file_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 file_socket.bind((self.host, 9999))
                 for file_name, list_peers in list(self.requests.items()):
                     for peer in list_peers:
@@ -337,6 +338,7 @@ class Node:
                                             break
                                         print("CHUNK DATA", chunk)
                                         file.write(chunk)
+                                        file.flush()
 
                                 print(f"Received data from socket {peer} : {file_name}")
 
@@ -346,6 +348,7 @@ class Node:
                         # print(f"Received data from socket {peer} : {file_name}")
                         break
                     del self.requests[file_name]
+                file_socket.shutdown()
                 file_socket.close()
             time.sleep(5)
 
