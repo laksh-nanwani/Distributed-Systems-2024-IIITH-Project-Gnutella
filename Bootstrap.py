@@ -3,7 +3,7 @@ import random
 import json
 
 class BootstrapServer:
-    def __init__(self, host='localhost', port=5001, num_peers = 5):
+    def __init__(self, host='localhost', port=5000, num_peers = 5):
         self.host = host
         self.port = port
         self.nodes = []
@@ -37,7 +37,7 @@ class BootstrapServer:
                 
                     nodes = self.nodes.copy()
                     nodes.remove(addr)
-                    print(self.nodes, nodes)
+                    # print(self.nodes, nodes)
 
 
                     if nodes:

@@ -5,9 +5,10 @@ import argparse
 import time
 import select
 import json
+import random
 
 class Node:
-    def __init__(self, dir_path, host="localhost", port=0, bootstrap_host="localhost", bootstrap_port=5001, bandwith = 1000):
+    def __init__(self, dir_path, host="localhost", port=0, bootstrap_host="localhost", bootstrap_port=5000, bandwith = 1000):
         self.host = host
         self.port = port
         self.ttl = 2
@@ -18,6 +19,9 @@ class Node:
         self.dir = dir_path
         self.requests = []
         self.bandwidth = bandwith
+        self.ping_interval = 60
+        self.pong_timeout = 5
+        self.max_num_peers = 5
 
     def connect_to_bootstrap(self):
         print("connect_to_bootstrap", end="\n\n")
@@ -35,6 +39,8 @@ class Node:
                 if response == "JOINED":
                     print("Connected to Bootstrap Server")
                     break
+
+        time.sleep(10) # for more processors to join
 
         while True:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -85,9 +91,7 @@ class Node:
         threading.Thread(target=self.listen_for_connections, args=(self.socket,), daemon=True).start()
         threading.Thread(target=self.handle_commands, daemon=True).start()
         threading.Thread(target=self.file_transfer, daemon=True).start()
-
-        # Flood PING to discover additional peers
-        self.flood_ping()
+        threading.Thread(target=self.flood_ping, daemon=True).start()
 
         while True:
             pass
@@ -102,7 +106,7 @@ class Node:
 
             if data.startswith("PING"):
                 print("PINGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
-                self.forward_ping(data)
+                self.handle_ping(data)
 
             elif data.startswith("PONG"):
                 print("PONGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG")
@@ -121,112 +125,106 @@ class Node:
                 _, _, _, file_name = data.split(":")
                 self.send_file(file_name, client_socket, client_addr)
 
-            elif ":" in data:
-                print(f"Peer {data} connected.")
-                host, port = data.split(":")
-                self.peers.append((host, int(port)))
+            # elif ":" in data:
+            #     print(f"Peer {data} connected.")
+            #     host, port = data.split(":")
+            #     self.peers.append((host, int(port)))
 
             client_socket.close()
 
-    def flood_ping(self):
-        print("flood_ping", end="\n\n")
-        for peer in self.peers[:]:  # Use a copy of the list to avoid modifying it during iteration
+    def send_ping(self, peers):
+        failed_pings = []
+        for peer in peers:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 try:
                     sock.connect(peer)
                     print("Sending PING to", peer)
-                    # message = f"PING:{self.host}:{self.port}"
-                    # message = f"PING:{self.host}:{self.port}:{self.host}:{self.host}:{self.ttl}"
-                    message = f"PING:{self.host}:{self.port}:{self.ttl}:{[(self.host, self.port)]}"
+                    message = f"PING:{self.host}:{self.port}:{self.ttl}"
                     sock.sendall(message.encode())
-
-                    response = sock.recv(1024).decode()
-                    if response.startswith("PONG"):
-                        _, host, port = response.split(":")
-                        new_peer = (host, int(port))
-                        if new_peer not in self.peers:
-                            self.peers.append(new_peer)
-                            print(f"Discovered new peer: {host}:{port}")
-
                 except ConnectionRefusedError:
                     print(f"Failed to connect to {peer}")
+                    failed_pings.append(peer)
+        return failed_pings
 
-    def send_pong(self, message):
-        print("send_pong", end="\n\n")
-        msg_parts = message.split(":")
-        # print(msg_parts, end = "\n\n\n")
-        ttl = int(msg_parts[3])
-        path = eval(msg_parts[4])
-        last_peer = path[-1]
-        path.pop()
-        print("SEEEEEEEEEEEEEEEEEEEEee")
-        print(msg_parts)
-        print(path)
+    def flood_ping(self):
+        while True:
+            print("flood_ping", end="\n\n")
+            self.new_peers = set()
+            self.update_neighbours = True
+            timestamp = time.time()
 
-        if len(path) == 0:
-            # -------------------------------------
-            self.pongs.append((msg_parts[1], msg_parts[2]))
-        else:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect(last_peer)
-                pong_message = f"PONG:{self.host}:{self.port}:{path}"
-                print("SENDING PONGGG to", last_peer, pong_message)
-                sock.sendall(pong_message.encode())
+            failed_pings = self.send_ping(self.peers)
 
-    def forward_ping(self, message):
+            while time.time() - timestamp <= self.pong_timeout:
+                failed_pings = self.send_ping(failed_pings)
+                time.sleep(0.5)
+
+            self.update_neighbours = False
+            if len(self.new_peers) == 0:
+                "No pongs received"
+                self.connect_to_bootstrap()
+            elif len(self.new_peers) <= self.max_num_peers:
+                self.peers = list(self.new_peers)
+            else:
+                indices = random.sample(range(len(self.new_peers)), self.max_num_peers)
+                new_peers = [self.new_peers[i] for i in indices]
+                self.peers = new_peers
+            
+            print("New peers:", self.peers)
+                
+            time.sleep(self.ping_interval)
+
+        # if len(self.peers) > self.max_peers:
+
+
+    def send_pong(self, origin_host, origin_port):
+        print("sending_pong", end="\n\n")
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect((origin_host,origin_port))
+            pong_message = f"PONG:{self.host}:{self.port}"
+            # print("SENDING PONG to", last_peer, pong_message)
+            sock.sendall(pong_message.encode())
+
+    def handle_ping(self, message):
         print("forward_ping", end="\n\n")
         msg_parts = message.split(":")
         print(msg_parts, end="\n\n\n")
         ttl = int(msg_parts[3])
-        path = eval(msg_parts[4])  # Convert string back to list of tuples
+        origin_host, origin_port = msg_parts[1], int(msg_parts[2])  # Convert string back to list of tuples
         # print(msg_parts, ttl, path)
 
-        # Append this node's address to the path and decrease TTL
-        path.append((self.host, self.port))
-        ttl -= 1
+        self.send_pong(origin_host, origin_port)
 
+        # Append this node's address to the path and decrease TTL
+        # path.append((self.host, self.port))
+        ttl -= 1
+        
         if ttl > 0:
             # Forward the PING to each peer except the previous sender
             for peer in self.peers:
-                if peer != path[-2]:  # Do not send back to the previous node
+                if peer[0] != origin_host and peer[1] != origin_port:  # Do not send back to the previous node
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                        forward_message = f"PING:{msg_parts[1]}:{msg_parts[2]}:{ttl}:{path}"
+                        # print(f"Forwarding ping to {origin_host}:{origin_port}")
+                        forward_message = f"PING:{msg_parts[1]}:{msg_parts[2]}:{ttl}"
                         print(forward_message)
                         sock.connect(peer)
                         sock.sendall(forward_message.encode())
-        else:
-            # If TTL is 0, respond with a PONG along the reverse path
-            self.send_pong(message)
+
+        if self.update_neighbours:
+            print(origin_host, origin_port)
+            self.new_peers.add((origin_host, origin_port))
 
     def handle_pong(self, message):
         print("handle_pong", end="\n\n")
-        print("AYAAAAAAAAAAAAAAAA")
+        # print("AYAAAAAAAAAAAAAAAA")
         print(message.split(":"))
-        m1, sender_host, sender_port, path_str = message.split(":")
+        _, sender_host, sender_port = message.split(":")
 
-        path = eval(path_str)
-        print("PATH", path)
-
-        # print("YEH DEKH   ", (self.host, self.port), path[0])
-        if len(path) == 0:
-            self.pongs.append((sender_host, int(sender_port)))
-            print(f"Received PONG from {sender_host}:{sender_port}")
-            return
-
-        if (self.host, self.port) == path[0]:
-            self.pongs.append((sender_host, int(sender_port)))
-            print(f"Received PONG from {sender_host}:{sender_port}")
-        else:
-            if path:
-                next_hop = path.pop()
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    # forward_message = f"PONG:{sender_host}:{sender_port}:{path}"
-                    forward_message = f"{m1}:{sender_host}:{sender_port}:{path}"
-                    sock.connect(next_hop)
-                    sock.sendall(forward_message.encode())
-            else:
-                self.pongs.append((sender_host, int(sender_port)))
-
+        if self.update_neighbours:
+            print(sender_host, sender_port)
+            self.new_peers.add((sender_host, int(sender_port)))
+            
     def get_pongs(self):
         if self.pongs:
             print("PONGs received from nodes:")
@@ -276,18 +274,18 @@ class Node:
         else:
             client_socket.sendall("QUERYFAIL".encode())
 
-    # def handle_queryhit(self, message):
-    #     print("handle_query", end="\n\n")
-    #     print(message)
-    #     _, sender_host, sender_port, path, file_name = message.split(":")
-    #     path = eval(path)
+    def handle_queryhit(self, message):
+        print("handle_query", end="\n\n")
+        print(message)
+        _, sender_host, sender_port, path, file_name = message.split(":")
+        path = eval(path)
 
-    #     if len(path) == 0:
-    #         self.requests[file_name].append((sender_host, sender_port))
-    #         return
+        if len(path) == 0:
+            self.requests[file_name].append((sender_host, sender_port))
+            return
 
-    #     if self.file_exists(self.dir, file_name):
-    #         query_reply = f"QUERYHIT:{self.host}:{self.port}:{path}:{file_name}"
+        if self.file_exists(self.dir, file_name):
+            query_reply = f"QUERYHIT:{self.host}:{self.port}:{path}:{file_name}"
 
     # def query_response(self, message):
     #     print("query_response", end="\n\n")
