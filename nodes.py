@@ -19,9 +19,12 @@ class Node:
         self.dir = dir_path
         self.requests = []
         self.bandwidth = bandwith
-        self.ping_interval = 60
-        self.pong_timeout = 5
+        self.ping_interval = 300
+        self.pong_timeout = 10
         self.max_num_peers = 5
+
+        self.ongoing_ping = False
+        self.live_peers = set()
 
     def connect_to_bootstrap(self):
         print("connect_to_bootstrap", end="\n\n")
@@ -91,7 +94,7 @@ class Node:
         threading.Thread(target=self.listen_for_connections, args=(self.socket,), daemon=True).start()
         threading.Thread(target=self.handle_commands, daemon=True).start()
         threading.Thread(target=self.file_transfer, daemon=True).start()
-        threading.Thread(target=self.flood_ping, daemon=True).start()
+        threading.Thread(target=self.flood_ping_thread, daemon=True).start()
 
         while True:
             pass
@@ -146,35 +149,40 @@ class Node:
                     failed_pings.append(peer)
         return failed_pings
 
-    def flood_ping(self):
+    def flood_ping_thread(self):
         while True:
-            print("flood_ping", end="\n\n")
-            self.new_peers = set()
-            self.update_neighbours = True
-            timestamp = time.time()
-
-            failed_pings = self.send_ping(self.peers)
-
-            while time.time() - timestamp <= self.pong_timeout:
-                failed_pings = self.send_ping(failed_pings)
-                time.sleep(0.5)
-
-            self.update_neighbours = False
-            if len(self.new_peers) == 0:
-                "No pongs received"
-                self.connect_to_bootstrap()
-            elif len(self.new_peers) <= self.max_num_peers:
-                self.peers = list(self.new_peers)
-            else:
-                indices = random.sample(range(len(self.new_peers)), self.max_num_peers)
-                new_peers = [self.new_peers[i] for i in indices]
-                self.peers = new_peers
             
-            print("New peers:", self.peers)
-                
+            if not self.ongoing_ping:
+                self.flood_ping()
+
             time.sleep(self.ping_interval)
 
         # if len(self.peers) > self.max_peers:
+
+    def flood_ping(self):
+        print("flood_ping", end="\n\n")
+        self.live_peers = set()
+        self.ongoing_ping = True
+        timestamp = time.time()
+
+        failed_pings = self.peers
+
+        while time.time() - timestamp <= self.pong_timeout:
+            failed_pings = self.send_ping(failed_pings)
+            time.sleep(0.5)
+
+        self.ongoing_ping = False
+        if len(self.live_peers) == 0:
+            "No pongs received"
+            self.connect_to_bootstrap()
+        elif len(self.live_peers) <= self.max_num_peers:
+            self.peers = list(self.live_peers)
+        else:
+            indices = random.sample(range(len(self.live_peers)), self.max_num_peers)
+            new_peers = [self.live_peers[i] for i in indices]
+            self.peers = new_peers
+        
+        print("New peers:", self.peers)
 
 
     def send_pong(self, origin_host, origin_port):
@@ -211,9 +219,12 @@ class Node:
                         sock.connect(peer)
                         sock.sendall(forward_message.encode())
 
-        if self.update_neighbours:
+        if self.ongoing_ping:
             print(origin_host, origin_port)
-            self.new_peers.add((origin_host, origin_port))
+            self.live_peers.add((origin_host, origin_port))
+
+        if len(self.peers) < self.max_num_peers:
+            self.peers.append((origin_host, origin_port))
 
     def handle_pong(self, message):
         print("handle_pong", end="\n\n")
@@ -221,9 +232,9 @@ class Node:
         print(message.split(":"))
         _, sender_host, sender_port = message.split(":")
 
-        if self.update_neighbours:
+        if self.ongoing_ping:
             print(sender_host, sender_port)
-            self.new_peers.add((sender_host, int(sender_port)))
+            self.live_peers.add((sender_host, int(sender_port)))
             
     def get_pongs(self):
         if self.pongs:
@@ -345,7 +356,7 @@ class Node:
             # print("1. Print Connected Nodes")
             # print("2. Print Pong Replies")
             # print("3. Exit")
-            command = input("Enter command: ").strip().upper()
+            command = input("Enter command (1-6): ").strip().upper()
             if command == "1":
                 self.get_connected_nodes()
             elif command == "2":
@@ -356,6 +367,8 @@ class Node:
                 file_name = input("Enter the file name :")
                 self.send_query(file_name)
             elif command == "5":
+                self.flood_ping()
+            elif command == "6":
                 exit(1)
 
     def file_transfer(self):
