@@ -4,10 +4,10 @@ import os
 import argparse
 import time
 import select
-
+import json
 
 class Node:
-    def __init__(self, dir_path, host="localhost", port=0, bootstrap_host="localhost", bootstrap_port=5000, bandwith = 1000):
+    def __init__(self, dir_path, host="localhost", port=0, bootstrap_host="localhost", bootstrap_port=5001, bandwith = 1000):
         self.host = host
         self.port = port
         self.ttl = 2
@@ -21,28 +21,55 @@ class Node:
 
     def connect_to_bootstrap(self):
         print("connect_to_bootstrap", end="\n\n")
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect((self.bootstrap_host, self.bootstrap_port))
 
-            # Listening Port info
-            node_info = f"{self.host}:{self.port}"
-            sock.sendall(node_info.encode())
-            print("Sent info")
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((self.bootstrap_host, self.bootstrap_port))
 
-            response = sock.recv(1024).decode()
+                # Listening Port info
+                msg = f"JOIN:{self.host}:{self.port}"
+                sock.sendall(msg.encode())
+                print("Sent info")
 
-            if response == "NO_NODES":
-                print("No nodes available, starting a new network.")
-            else:
-                peer_host, peer_port = response.split(":")
+                response = sock.recv(1024).decode()
+                if response == "JOINED":
+                    print("Connected to Bootstrap Server")
+                    break
 
-                peer_port = int(peer_port)
-                peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                peer_socket.connect((peer_host, peer_port))
-                peer_socket.sendall(node_info.encode())
+        while True:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.connect((self.bootstrap_host, self.bootstrap_port))
 
-                self.peers.append((peer_host, int(peer_port)))
-                print(f"Connected to peer: {peer_host}:{peer_port}")
+                # Listening Port info
+                msg = f"REQUEST_PEERS:{self.host}:{self.port}"
+                sock.sendall(msg.encode())
+                print("Requested Peers")
+
+                response = sock.recv(1024).decode()
+                nodes_string = ""
+                while len(response) > 0:
+                    nodes_string += response
+                    response = sock.recv(1024).decode()
+
+                if not (len(nodes_string) == 0 or nodes_string == "NO_NODES"):
+                    peers = json.loads(nodes_string)
+                    self.peers = [(peer[0], int(peer[1])) for peer in peers]
+                    # peer_host, peer_port = response.split(":")
+
+                    # peer_port = int(peer_port)
+                    # peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    # peer_socket.connect((peer_host, peer_port))
+                    # peer_socket.sendall(node_info.encode())
+
+                    # self.peers.append((peer_host, int(peer_port)))
+                    # print(f"Connected to peer: {peer_host}:{peer_port}")
+                    print("Received peers:", self.peers)
+                    break
+
+            print("No nodes available, retrying again in 15 secs")
+            time.sleep(15)
+            
+
 
     def start(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

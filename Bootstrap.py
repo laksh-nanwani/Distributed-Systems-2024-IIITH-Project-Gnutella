@@ -1,11 +1,13 @@
 import socket
 import random
+import json
 
 class BootstrapServer:
-    def __init__(self, host='localhost', port=5000):
+    def __init__(self, host='localhost', port=5001, num_peers = 5):
         self.host = host
         self.port = port
         self.nodes = []
+        self.num_peers = num_peers
 
     def start(self):
         # AF_INET - IPv4
@@ -18,18 +20,38 @@ class BootstrapServer:
             while True:
                 client, addr = server.accept()
                 # print("OS ne diye ", client, addr)
-                
-                if self.nodes:
-                    chosen_node = random.choice(self.nodes)
-                    client.sendall(f"{chosen_node[0]}:{chosen_node[1]}".encode())
-                else:
-                    client.sendall(b"NO_NODES")
+                msg = client.recv(1024).decode()
 
-                node_info = client.recv(1024).decode()
-                if node_info:
-                    print(f"Node {node_info} connected.")
-                    host, port = node_info.split(":")
-                    self.nodes.append((host, int(port)))
+                if msg.startswith("JOIN"):
+                    _, host, port = msg.split(":")
+                    addr = (host, int(port))
+                    if addr not in self.nodes:
+                        self.nodes.append(addr)
+
+                    print(f"Node {addr} connected.")
+                    client.sendall("JOINED".encode())
+
+                elif msg.startswith("REQUEST_PEERS"):
+                    _, host, port = msg.split(":")
+                    addr = (host, int(port))
+                
+                    nodes = self.nodes.copy()
+                    nodes.remove(addr)
+                    print(self.nodes, nodes)
+
+
+                    if nodes:
+                        if len(nodes) < self.num_peers:
+                        # chosen_node = random.choice(self.nodes)
+                            client.sendall(json.dumps(nodes).encode())
+                        else:
+                            indices = random.sample(range(len(nodes)), self.num_peers)
+                            nodes_send = [nodes[i] for i in indices]
+                            client.sendall(json.dumps(nodes_send).encode())
+
+                    else:
+                        client.sendall(b"NO_NODES")
+
                     # print(self.nodes)
     
                 client.close()
