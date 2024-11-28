@@ -344,7 +344,6 @@ class Node:
 
         if len(peers_with_file) > 0:
             print("Peers with file:", peers_with_file)
-            print(f"Found file at {peers_with_file}")
             peers_with_file = sorted(peers_with_file, key = lambda x:x[2], reverse=True)
             best_peer = peers_with_file[0]
             self.requests.append([file_name, (best_peer[0], best_peer[1])])
