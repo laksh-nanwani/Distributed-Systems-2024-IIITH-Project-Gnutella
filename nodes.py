@@ -246,6 +246,8 @@ class Node:
             print("Did not receive any replies yet.")
 
     def get_connected_nodes(self):
+        print("Node Id:")
+        print(f"- {self.host}:{self.port}")
         if self.peers:
             print("Connected nodes:")
             for peer in self.peers:
