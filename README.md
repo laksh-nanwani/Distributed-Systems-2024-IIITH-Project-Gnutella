@@ -1,5 +1,9 @@
 # Gnutella-like P2P Network
 
+## Team 13 - 
+## Laksh Nanwani (2021701002)
+## Harshita Harshita (2023201002)
+
 ## Overview
 This project implements a Gnutella-inspired peer-to-peer (P2P) network. The network consists of nodes that communicate and share files efficiently using messages such as `PING`, `PONG`, `QUERY`, and `QUERYHIT`.
 
