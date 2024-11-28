@@ -3,7 +3,7 @@ import random
 import json
 
 class BootstrapServer:
-    def __init__(self, host='localhost', port=5000, num_peers = 5):
+    def __init__(self, host='localhost', port=5000, num_peers = 2):
         self.host = host
         self.port = port
         self.nodes = []
@@ -19,7 +19,6 @@ class BootstrapServer:
             
             while True:
                 client, addr = server.accept()
-                # print("OS ne diye ", client, addr)
                 msg = client.recv(1024).decode()
 
                 if msg.startswith("JOIN"):
