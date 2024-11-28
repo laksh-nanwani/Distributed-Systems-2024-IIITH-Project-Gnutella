@@ -1,11 +1,12 @@
 # Gnutella-like P2P Network
 
-## Team 13 - 
-## Laksh Nanwani (2021701002)
-## Harshita Harshita (2023201002)
+## Team 13
+Laksh Nanwani (2021701002)
+
+Harshita Harshita (2023201002)
 
 ## Overview
-This project implements a Gnutella-inspired peer-to-peer (P2P) network. The network consists of nodes that communicate and share files efficiently using messages such as `PING`, `PONG`, `QUERY`, and `QUERYHIT`.
+This project implements a Gnutella-inspired peer-to-peer (P2P) network. The network consists of nodes communicating and sharing files efficiently using messages such as `PING`, `PONG`, `QUERY`, and `QUERYHIT`.
 
 ## How It Works
 
@@ -24,7 +25,7 @@ This project implements a Gnutella-inspired peer-to-peer (P2P) network. The netw
 
 ### 4. File Querying
 - If a node needs a file, it sends a `QUERY` message, which is also flooded through the network like `PING`.
-- Nodes that have the requested file respond with a `QUERYHIT` message, which traces back to the querying node.
+- Nodes with the requested file respond with a `QUERYHIT` message, which traces back to the querying node.
 
 ### 5. File Transfer
 - After receiving all `QUERYHIT` responses, the node selects the peer with the **highest bandwidth** to download the file.
@@ -49,9 +50,9 @@ This project implements a Gnutella-inspired peer-to-peer (P2P) network. The netw
 
 ## Message Types
 - **PING**: Initiates discovery of other nodes in the network.
-- **PONG**: Response to a `PING`, includes details like IP, port, and available resources.
+- **PONG**: Response to a `PING` includes details like IP, port, and available resources.
 - **QUERY**: Used to search for files in the network.
-- **QUERYHIT**: Response to a `QUERY`, includes the file's location and the peer's bandwidth.
+- **QUERYHIT**: Response to a `QUERY` includes the file's location and the peer's bandwidth.
 
 ## Features
 - Decentralized P2P network with dynamic node discovery.
