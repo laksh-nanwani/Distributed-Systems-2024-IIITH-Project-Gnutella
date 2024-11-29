@@ -7,8 +7,18 @@ import select
 import json
 import random
 
+
 class Node:
-    def __init__(self, dir_path, host="localhost", port=0, bootstrap_host="localhost", bootstrap_port=5000, bandwith = 1000, max_num_peers = 2):
+    def __init__(
+        self,
+        dir_path,
+        host="localhost",
+        port=0,
+        bootstrap_host="localhost",
+        bootstrap_port=5000,
+        bandwith=1000,
+        max_num_peers=4,
+    ):
         self.host = host
         self.port = port
         self.ttl = 2
@@ -46,7 +56,7 @@ class Node:
                     print("Connected to Bootstrap Server")
                     break
 
-        time.sleep(10) # for more processors to join
+        time.sleep(10)  # for more processors to join
 
         while True:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -80,8 +90,6 @@ class Node:
 
             print("No nodes available, retrying again in 15 secs")
             time.sleep(15)
-            
-
 
     def start(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -149,7 +157,6 @@ class Node:
 
     def flood_ping_thread(self):
         while True:
-            
             if not self.ongoing_ping:
                 self.flood_ping()
 
@@ -178,14 +185,14 @@ class Node:
             live_peers = list(self.live_peers)
             new_peers = [live_peers[i] for i in indices]
             self.peers = new_peers
-        
+
         print("New peers:", self.peers)
 
     def send_pong(self, origin_host, origin_port):
         print("sending_pong", end="\n\n")
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect((origin_host,origin_port))
+            sock.connect((origin_host, origin_port))
             pong_message = f"PONG:{self.host}:{self.port}"
             # print("SENDING PONG to", last_peer, pong_message)
             sock.sendall(pong_message.encode())
@@ -201,7 +208,7 @@ class Node:
         self.send_pong(origin_host, origin_port)
 
         ttl -= 1
-        
+
         if ttl > 0:
             for peer in self.peers:
                 if peer[0] != origin_host and peer[1] != origin_port:  # Do not send back to the origin node
@@ -219,13 +226,13 @@ class Node:
 
         if origin_addr in self.peers:
             return
-        
+
         if len(self.peers) < self.max_num_peers:
             self.peers.append(origin_addr)
         else:
             remove_index = random.randint(0, self.max_num_peers)
             if remove_index < self.max_num_peers:
-                self.peers[remove_index] = (origin_addr)
+                self.peers[remove_index] = origin_addr
 
     def handle_pong(self, message):
         print("handle_pong", end="\n\n")
@@ -236,7 +243,7 @@ class Node:
         if self.ongoing_ping:
             print(sender_host, sender_port)
             self.live_peers.add((sender_host, int(sender_port)))
-            
+
     def get_pongs(self):
         if self.pongs:
             print("PONGs received from nodes:")
@@ -346,7 +353,7 @@ class Node:
 
         if len(peers_with_file) > 0:
             print("Peers with file:", peers_with_file)
-            peers_with_file = sorted(peers_with_file, key = lambda x:x[2], reverse=True)
+            peers_with_file = sorted(peers_with_file, key=lambda x: x[2], reverse=True)
             best_peer = peers_with_file[0]
             self.requests.append([file_name, (best_peer[0], best_peer[1])])
             print(f"Best peer for {file_name}: {best_peer}")
@@ -383,7 +390,6 @@ class Node:
 
                     except Exception as e:
                         print(f"Exception while receiving file {file_name} from {best_peer}")
-                        
 
     def send_file(self, file_name, client_socket, client_addr):
         try:

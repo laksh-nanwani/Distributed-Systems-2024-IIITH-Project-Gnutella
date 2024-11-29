@@ -2,8 +2,9 @@ import socket
 import random
 import json
 
+
 class BootstrapServer:
-    def __init__(self, host='localhost', port=5000, num_peers = 2):
+    def __init__(self, host="localhost", port=5000, num_peers=3):
         self.host = host
         self.port = port
         self.nodes = []
@@ -16,7 +17,7 @@ class BootstrapServer:
             server.bind((self.host, self.port))
             server.listen()
             print("Bootstrap server started at", self.host, ":", self.port)
-            
+
             while True:
                 client, addr = server.accept()
                 msg = client.recv(1024).decode()
@@ -33,15 +34,14 @@ class BootstrapServer:
                 elif msg.startswith("REQUEST_PEERS"):
                     _, host, port = msg.split(":")
                     addr = (host, int(port))
-                
+
                     nodes = self.nodes.copy()
                     nodes.remove(addr)
                     # print(self.nodes, nodes)
 
-
                     if nodes:
                         if len(nodes) < self.num_peers:
-                        # chosen_node = random.choice(self.nodes)
+                            # chosen_node = random.choice(self.nodes)
                             client.sendall(json.dumps(nodes).encode())
                         else:
                             indices = random.sample(range(len(nodes)), self.num_peers)
@@ -52,8 +52,9 @@ class BootstrapServer:
                         client.sendall(b"NO_NODES")
 
                     # print(self.nodes)
-    
+
                 client.close()
+
 
 if __name__ == "__main__":
     bootstrap = BootstrapServer()
